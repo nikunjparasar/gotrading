@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"exchange/orderbook"
+	"net/http"
 
 	"github.com/labstack/echo/v4"
 )
@@ -12,6 +13,7 @@ func main() {
 
 	ex := NewExchange()
 
+	e.GET("book/:ticker", ex.handleGetBook)
 	e.POST("/order", ex.handlePlaceOrder)
 
 	e.Start(":3000")
@@ -26,6 +28,9 @@ const (
 
 	LIMIT_ORDER  OrderType = "LIMIT"
 	MARKET_ORDER OrderType = "MARKET"
+
+	SELL bool = false
+	BUY  bool = true
 )
 
 type Exchange struct {
@@ -63,5 +68,45 @@ func (ex *Exchange) handlePlaceOrder(c echo.Context) error {
 	order := orderbook.NewOrder(placeOrderData.Buy, placeOrderData.Size)
 	ob.PlaceLimitOrder(placeOrderData.Price, order)
 
-	return c.JSON(200, map[string]any{"msg": "order placed"}) // Change 'any' to 'interface{}'
+	return c.JSON(200, map[string]any{"msg": "order placed"})
+}
+
+// JSON representation
+type Order struct {
+	Price     float64
+	Size      float64
+	Bid       bool
+	Timestamp int64
+}
+
+type OrderbookData struct {
+	Asks []*Order
+	Bids []*Order
+}
+
+func (ex *Exchange) handleGetBook(c echo.Context) error {
+	ticker := Ticker(c.Param("ticker"))
+	ob, ok := ex.orderbooks[ticker]
+	if !ok {
+		return c.JSON(http.StatusBadRequest, map[string]any{"msg": "ticker not found"})
+	}
+
+	orderbookData := OrderbookData{
+		Asks: []*Order{},
+		Bids: []*Order{},
+	}
+
+	for _, limit := range ob.Asks() {
+		for _, order := range limit.Orders() {
+			o := Order{
+				Price:     limit.Price(),
+				Size:      order.Size(),
+				Bid:       order.Buy(),
+				Timestamp: order.Timestamp(),
+			}
+			orderbookData.Asks = append(orderbookData.Asks, &o)
+		}
+	}
+
+	return c.JSON(http.StatusOK, orderbookData)
 }

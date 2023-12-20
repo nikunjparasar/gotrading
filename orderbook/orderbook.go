@@ -28,6 +28,11 @@ type Order struct {
 	timestamp int64
 }
 
+func (o *Order) Limit() *Limit    { return o.lim }
+func (o *Order) Buy() bool        { return o.buy }
+func (o *Order) Size() float64    { return o.ordersize }
+func (o *Order) Timestamp() int64 { return o.timestamp }
+
 type Match struct {
 	ask        *Order
 	bid        *Order
@@ -90,6 +95,10 @@ func NewLimit(setprice float64) *Limit {
 		orders: []*Order{},
 	}
 }
+
+func (l *Limit) Orders() Orders       { return l.orders }
+func (l *Limit) Price() float64       { return l.price }
+func (l *Limit) TotalVolume() float64 { return l.totalvol }
 
 // add an order to a limit by appending to the orders slice
 func (l *Limit) AddOrder(o *Order) {
