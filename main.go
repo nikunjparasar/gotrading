@@ -22,6 +22,7 @@ func main() {
 // define the market
 type Ticker string
 type OrderType string
+type OrderAction string
 
 const (
 	TICKER_ETH Ticker = "ETH"
@@ -29,8 +30,8 @@ const (
 	LIMIT_ORDER  OrderType = "LIMIT"
 	MARKET_ORDER OrderType = "MARKET"
 
-	SELL bool = false
-	BUY  bool = true
+	BUY  OrderAction = "BUY"
+	SELL OrderAction = "SELL"
 )
 
 type Exchange struct {
@@ -50,7 +51,7 @@ func NewExchange() *Exchange {
 type PlaceOrderRequest struct {
 	// public fields
 	Type   OrderType //limit or market
-	Buy    bool
+	Action OrderAction
 	Size   float64
 	Price  float64
 	Ticker Ticker
@@ -65,10 +66,20 @@ func (ex *Exchange) handlePlaceOrder(c echo.Context) error {
 
 	ticker := Ticker(placeOrderData.Ticker)
 	ob := ex.orderbooks[ticker]
-	order := orderbook.NewOrder(placeOrderData.Buy, placeOrderData.Size)
-	ob.PlaceLimitOrder(placeOrderData.Price, order)
+	bid := placeOrderData.Action == BUY
+	order := orderbook.NewOrder(bid, placeOrderData.Size)
 
-	return c.JSON(200, map[string]any{"msg": "order placed"})
+	if placeOrderData.Type == LIMIT_ORDER {
+		ob.PlaceLimitOrder(placeOrderData.Price, order)
+		return c.JSON(http.StatusOK, map[string]any{"msg": "LIMIT ORDER PLACED"})
+	}
+
+	if placeOrderData.Type == MARKET_ORDER {
+		matches := ob.PlaceMarketOrder(order)
+		return c.JSON(http.StatusOK, map[string]any{"matches": len(matches)})
+	}
+
+	return nil
 }
 
 // JSON representation
@@ -80,8 +91,10 @@ type Order struct {
 }
 
 type OrderbookData struct {
-	Asks []*Order
-	Bids []*Order
+	TotalBidVolume float64
+	TotalAskVolume float64
+	Asks           []*Order
+	Bids           []*Order
 }
 
 func (ex *Exchange) handleGetBook(c echo.Context) error {
@@ -92,8 +105,10 @@ func (ex *Exchange) handleGetBook(c echo.Context) error {
 	}
 
 	orderbookData := OrderbookData{
-		Asks: []*Order{},
-		Bids: []*Order{},
+		TotalBidVolume: ob.BidsTotalVolume(),
+		TotalAskVolume: ob.AsksTotalVolume(),
+		Asks:           []*Order{},
+		Bids:           []*Order{},
 	}
 
 	for _, limit := range ob.Asks() {
@@ -105,6 +120,17 @@ func (ex *Exchange) handleGetBook(c echo.Context) error {
 				Timestamp: order.Timestamp(),
 			}
 			orderbookData.Asks = append(orderbookData.Asks, &o)
+		}
+	}
+	for _, limit := range ob.Bids() {
+		for _, order := range limit.Orders() {
+			o := Order{
+				Price:     limit.Price(),
+				Size:      order.Size(),
+				Bid:       order.Buy(),
+				Timestamp: order.Timestamp(),
+			}
+			orderbookData.Bids = append(orderbookData.Bids, &o)
 		}
 	}
 
