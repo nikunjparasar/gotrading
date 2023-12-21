@@ -17,19 +17,19 @@ $$ |  $$ |$$ |  $$ |$$ |  $$ |$$ |      $$ |  $$ |
 \______/ \__|  \__|\_______/ \________|\__|  \__|
 */
 const (
-	BUY  = true
-	SELL = false
+	BUY  = "BUY"
+	SELL = "SELL"
 )
 
 type Order struct {
 	ordersize float64
-	buy       bool
+	action    string
 	lim       *Limit
 	timestamp int64
 }
 
 func (o *Order) Limit() *Limit    { return o.lim }
-func (o *Order) Buy() bool        { return o.buy }
+func (o *Order) Action() string   { return o.action }
 func (o *Order) Size() float64    { return o.ordersize }
 func (o *Order) Timestamp() int64 { return o.timestamp }
 
@@ -41,10 +41,10 @@ type Match struct {
 }
 
 // Constructor for Order type
-func NewOrder(bid bool, size float64) *Order {
+func NewOrder(ac string, size float64) *Order {
 	return &Order{
 		ordersize: size,
-		buy:       bid,
+		action:    ac,
 		timestamp: time.Now().UnixNano(),
 	}
 }
@@ -130,7 +130,7 @@ func (l *Limit) fillOrder(a, b *Order) Match {
 	)
 
 	// check which order is the bid vs ask
-	if a.buy {
+	if a.action == BUY {
 		buy = a
 		sell = b
 	} else {
@@ -249,7 +249,7 @@ func NewOrderbook() *Orderbook {
 func (ob *Orderbook) PlaceMarketOrder(o *Order) []Match {
 	matches := []Match{}
 
-	if o.buy {
+	if o.action == BUY {
 		if o.ordersize > ob.AsksTotalVolume() {
 			panic(fmt.Errorf("not enough volume [size: %.2f] to fill market order [size: %.2f]", ob.AsksTotalVolume(), o.ordersize))
 		}
@@ -283,7 +283,7 @@ func (ob *Orderbook) PlaceMarketOrder(o *Order) []Match {
 func (ob *Orderbook) PlaceLimitOrder(price float64, o *Order) {
 	var limit *Limit
 
-	if o.buy {
+	if o.action == BUY {
 		limit = ob.bidLimits[price]
 	} else {
 		limit = ob.askLimits[price]
@@ -292,7 +292,7 @@ func (ob *Orderbook) PlaceLimitOrder(price float64, o *Order) {
 	if limit == nil {
 		limit = NewLimit(price)
 
-		if o.buy {
+		if o.action == BUY {
 			ob.bids = append(ob.bids, limit)
 			ob.bidLimits[price] = limit
 		} else {
@@ -309,8 +309,8 @@ func (ob *Orderbook) CancelOrder(o *Order) {
 	limit.DeleteOrder(o)
 }
 
-func (ob *Orderbook) clearLimits(bid bool, l *Limit) {
-	if bid {
+func (ob *Orderbook) clearLimits(action string, l *Limit) {
+	if action == BUY {
 		delete(ob.bidLimits, l.price)
 		for i := 0; i < len(ob.bids); i++ {
 			if ob.bids[i] == l {

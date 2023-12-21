@@ -30,8 +30,8 @@ const (
 	LIMIT_ORDER  OrderType = "LIMIT"
 	MARKET_ORDER OrderType = "MARKET"
 
-	BUY  OrderAction = "BUY"
-	SELL OrderAction = "SELL"
+	BUY  = "BUY"
+	SELL = "SELL"
 )
 
 type Exchange struct {
@@ -51,7 +51,7 @@ func NewExchange() *Exchange {
 type PlaceOrderRequest struct {
 	// public fields
 	Type   OrderType //limit or market
-	Action OrderAction
+	Action string
 	Size   float64
 	Price  float64
 	Ticker Ticker
@@ -66,8 +66,8 @@ func (ex *Exchange) handlePlaceOrder(c echo.Context) error {
 
 	ticker := Ticker(placeOrderData.Ticker)
 	ob := ex.orderbooks[ticker]
-	bid := placeOrderData.Action == BUY
-	order := orderbook.NewOrder(bid, placeOrderData.Size)
+
+	order := orderbook.NewOrder(placeOrderData.Action, placeOrderData.Size)
 
 	if placeOrderData.Type == LIMIT_ORDER {
 		ob.PlaceLimitOrder(placeOrderData.Price, order)
@@ -86,7 +86,7 @@ func (ex *Exchange) handlePlaceOrder(c echo.Context) error {
 type Order struct {
 	Price     float64
 	Size      float64
-	Bid       bool
+	Action    string
 	Timestamp int64
 }
 
@@ -116,7 +116,7 @@ func (ex *Exchange) handleGetBook(c echo.Context) error {
 			o := Order{
 				Price:     limit.Price(),
 				Size:      order.Size(),
-				Bid:       order.Buy(),
+				Action:    order.Action(),
 				Timestamp: order.Timestamp(),
 			}
 			orderbookData.Asks = append(orderbookData.Asks, &o)
@@ -127,7 +127,7 @@ func (ex *Exchange) handleGetBook(c echo.Context) error {
 			o := Order{
 				Price:     limit.Price(),
 				Size:      order.Size(),
-				Bid:       order.Buy(),
+				Action:    order.Action(),
 				Timestamp: order.Timestamp(),
 			}
 			orderbookData.Bids = append(orderbookData.Bids, &o)
