@@ -22,7 +22,6 @@ func main() {
 // define the market
 type Ticker string
 type OrderType string
-type OrderAction string
 
 const (
 	TICKER_ETH Ticker = "ETH"

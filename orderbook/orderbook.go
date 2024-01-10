@@ -119,7 +119,7 @@ func (l *Limit) DeleteOrder(o *Order) {
 	o.lim = nil
 	l.totalvol -= o.ordersize
 
-	sort.Sort(l.orders)
+	sort.Sort(l.orders) //////////////////////////////////////////////////////////////////////// OPTIMIZE
 }
 
 func (l *Limit) fillOrder(a, b *Order) Match {
@@ -227,12 +227,12 @@ func (ob *Orderbook) AsksTotalVolume() float64 {
 }
 
 func (ob *Orderbook) Asks() []*Limit {
-	sort.Sort(ByBestAsk{ob.asks})
+	sort.Sort(ByBestAsk{ob.asks}) //////////////////////////////////////////////////////////////// OPTIMIZE
 	return ob.asks
 }
 
 func (ob *Orderbook) Bids() []*Limit {
-	sort.Sort(ByBestBid{ob.bids})
+	sort.Sort(ByBestBid{ob.bids}) //////////////////////////////////////////////////////////////// OPTIMIZE
 	return ob.bids
 }
 
@@ -368,7 +368,7 @@ func (b ByBestBid) Swap(i, j int) {
 }
 func (b ByBestBid) Less(i, j int) bool { return b.Limits[i].price > b.Limits[j].price }
 
-// OPTIMIZATION REDUCE RESTRUCTURE TIME FROM O(NLOGN) TO O(LOGN)
+// OPTIMIZATION REDUCE RESTRUCTURE TIME FROM O(NLOGN) TO O(LOGN) BY USING A HEAP INSTEAD OF SORTING
 
 // type AsksHeap struct {
 // 	limits []*Limit
