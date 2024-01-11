@@ -314,17 +314,10 @@ func (ob *Orderbook) CancelOrder(o *Order) {
 	limit.DeleteOrder(o)
 }
 
-/*
- $$$$$$\  $$$$$$$\ $$$$$$$$\ $$$$$$\ $$\      $$\ $$$$$$\ $$$$$$$$\  $$$$$$\ $$$$$$$$\ $$$$$$\  $$$$$$\  $$\   $$\
-$$  __$$\ $$  __$$\\__$$  __|\_$$  _|$$$\    $$$ |\_$$  _|\____$$  |$$  __$$\\__$$  __|\_$$  _|$$  __$$\ $$$\  $$ |
-$$ /  $$ |$$ |  $$ |  $$ |     $$ |  $$$$\  $$$$ |  $$ |      $$  / $$ /  $$ |  $$ |     $$ |  $$ /  $$ |$$$$\ $$ |
-$$ |  $$ |$$$$$$$  |  $$ |     $$ |  $$\$$\$$ $$ |  $$ |     $$  /  $$$$$$$$ |  $$ |     $$ |  $$ |  $$ |$$ $$\$$ |
-$$ |  $$ |$$  ____/   $$ |     $$ |  $$ \$$$  $$ |  $$ |    $$  /   $$  __$$ |  $$ |     $$ |  $$ |  $$ |$$ \$$$$ |
-$$ |  $$ |$$ |        $$ |     $$ |  $$ |\$  /$$ |  $$ |   $$  /    $$ |  $$ |  $$ |     $$ |  $$ |  $$ |$$ |\$$$ |
- $$$$$$  |$$ |        $$ |   $$$$$$\ $$ | \_/ $$ |$$$$$$\ $$$$$$$$\ $$ |  $$ |  $$ |   $$$$$$\  $$$$$$  |$$ | \$$ |
- \______/ \__|        \__|   \______|\__|     \__|\______|\________|\__|  \__|  \__|   \______| \______/ \__|  \__|
-
-*/
+// HEAP OPTIMIZATIONS FOR ORDERBOOK LIMITS
+// Reduced each market order to average O(log(n)) time complexity from O(nlog(n))
+// to show the orderbook on the frontend, we can just iterate through the top limits
+// will be klogn for showing it on the frontend where k is the number of limits to show
 
 // min heap for storing asks and keeping track of total volume
 type AsksHeap struct {
