@@ -81,9 +81,6 @@ $$ |        $$ |  $$ \$$$  $$ |  $$ |     $$ |
 $$ |        $$ |  $$ |\$  /$$ |  $$ |     $$ |
 $$$$$$$$\ $$$$$$\ $$ | \_/ $$ |$$$$$$\    $$ |
 \________|\______|\__|     \__|\______|   \__|
-
-
-
 */
 
 type Limit struct {
@@ -95,8 +92,9 @@ type Limit struct {
 // constructor for a Limit
 func NewLimit(setprice float64) *Limit {
 	return &Limit{
-		price:  setprice,
-		orders: []*Order{},
+		price:    setprice,
+		orders:   []*Order{},
+		totalvol: 0,
 	}
 }
 
@@ -115,6 +113,7 @@ func (l *Limit) DeleteOrder(o *Order) {
 	for i := 0; i < len(l.orders); i++ {
 		if l.orders[i] == o {
 			// delete order efficiently by moving to end of slice and slicing off
+
 			l.orders[i] = l.orders[len(l.orders)-1]
 			l.orders = l.orders[:len(l.orders)-1]
 		}
@@ -123,7 +122,7 @@ func (l *Limit) DeleteOrder(o *Order) {
 	o.lim = nil
 	l.totalvol -= o.ordersize
 
-	sort.Sort(l.orders) //////////////////////////////////////////////////////////////////////// OPTIMIZE
+	sort.Sort(l.orders)
 }
 
 func (l *Limit) fillOrder(a, b *Order) Match {
@@ -210,43 +209,35 @@ type Orderbook struct {
 	bidLimits map[float64]*Limit
 }
 
-func (ob *Orderbook) BidsTotalVolume() float64 {
-	totalVolume := 0.0
-
-	for i := 0; i < ob.bids.Len(); i++ {
-		totalVolume += ob.bids[i].totalvol
-	}
-
-	return totalVolume
-}
-
-func (ob *Orderbook) AsksTotalVolume() float64 {
-	totalVolume := 0.0
-
-	for i := 0; i < ob.asks.Len(); i++ {
-		totalVolume += ob.asks[i].totalvol
-	}
-
-	return totalVolume
-}
-
-func (ob *Orderbook) Asks() []*Limit {
-	return ob.asks
-}
-
-func (ob *Orderbook) Bids() []*Limit {
-	return ob.bids
-}
-
 // orderbook constructor
 func NewOrderbook() *Orderbook {
 	return &Orderbook{
-		asks:      []*Limit{},
-		bids:      []*Limit{},
+		asks:      *NewAsksHeap(),
+		bids:      *NewBidsHeap(),
 		askLimits: make(map[float64]*Limit),
 		bidLimits: make(map[float64]*Limit),
 	}
 }
+
+func (ob *Orderbook) BidsTotalVolume() float64 {
+	totalVol := 0.0
+	for _, limit := range ob.bids.Limits {
+		totalVol += limit.TotalVolume()
+	}
+	return totalVol
+}
+
+func (ob *Orderbook) AsksTotalVolume() float64 {
+	totalVol := 0.0
+	for _, limit := range ob.asks.Limits {
+		totalVol += limit.TotalVolume()
+	}
+	return totalVol
+}
+
+func (ob *Orderbook) Asks() AsksHeap { return ob.asks }
+
+func (ob *Orderbook) Bids() BidsHeap { return ob.bids }
 
 func (ob *Orderbook) PlaceMarketOrder(o *Order) []Match {
 	matches := []Match{}
@@ -256,27 +247,39 @@ func (ob *Orderbook) PlaceMarketOrder(o *Order) []Match {
 			panic(fmt.Errorf("not enough volume [size: %.2f] to fill market order [size: %.2f]", ob.AsksTotalVolume(), o.ordersize))
 		}
 
-		for _, limit := range ob.Asks() {
-			limitMatches := limit.Fill(o)
-			matches = append(matches, limitMatches...)
-
-			if len(limit.orders) == 0 {
-				ob.clearLimits(SELL, limit)
+		//get the best asks
+		filledQty := 0.0
+		fillSize := o.ordersize
+		for filledQty < fillSize {
+			bestAsk := ob.asks.Top() // Limit containing the best ask orders
+			oldLimVol := bestAsk.TotalVolume()
+			matches = append(matches, bestAsk.Fill(o)...)
+			newLimVol := bestAsk.TotalVolume()
+			filledQty += oldLimVol - newLimVol
+			if bestAsk.TotalVolume() == 0 {
+				ob.asks.Pop()
+				delete(ob.askLimits, bestAsk.Price())
 			}
 		}
+
 	} else {
 		if o.ordersize > ob.BidsTotalVolume() {
 			panic(fmt.Errorf("not enough volume [size: %.2f] to fill market order [size: %.2f]", ob.AsksTotalVolume(), o.ordersize))
 		}
-
-		for _, limit := range ob.Bids() {
-			limitMatches := limit.Fill(o)
-			matches = append(matches, limitMatches...)
-
-			if len(limit.orders) == 0 {
-				ob.clearLimits(BUY, limit)
+		filledQty := 0.0
+		fillSize := o.ordersize
+		for filledQty < fillSize {
+			bestBid := ob.bids.Top() // Limit containing the best bid orders
+			oldLimVol := bestBid.TotalVolume()
+			matches = append(matches, bestBid.Fill(o)...)
+			newLimVol := bestBid.TotalVolume()
+			filledQty += oldLimVol - newLimVol
+			if bestBid.TotalVolume() == 0 {
+				ob.bids.Pop()
+				delete(ob.bidLimits, bestBid.Price())
 			}
 		}
+
 	}
 
 	return matches
@@ -295,10 +298,10 @@ func (ob *Orderbook) PlaceLimitOrder(price float64, o *Order) {
 		limit = NewLimit(price)
 
 		if o.action == BUY {
-			ob.bids = append(ob.bids, limit)
+			ob.bids.Push(limit)
 			ob.bidLimits[price] = limit
 		} else {
-			ob.asks = append(ob.asks, limit)
+			ob.asks.Push(limit)
 			ob.askLimits[price] = limit
 		}
 	}
@@ -309,28 +312,6 @@ func (ob *Orderbook) PlaceLimitOrder(price float64, o *Order) {
 func (ob *Orderbook) CancelOrder(o *Order) {
 	limit := o.lim
 	limit.DeleteOrder(o)
-}
-
-func (ob *Orderbook) clearLimits(action string, l *Limit) {
-	if action == BUY {
-		delete(ob.bidLimits, l.price)
-		for i := 0; i < len(ob.bids); i++ {
-			if ob.bids[i] == l {
-				ob.bids[i] = ob.bids[len(ob.bids)-1]
-				ob.bids = ob.bids[:len(ob.bids)-1]
-			}
-
-		}
-	} else {
-		delete(ob.askLimits, l.price)
-		for i := 0; i < len(ob.asks); i++ {
-			if ob.asks[i] == l {
-				ob.asks[i] = ob.asks[len(ob.asks)-1]
-				ob.asks = ob.asks[:len(ob.asks)-1]
-			}
-
-		}
-	}
 }
 
 /*
@@ -348,14 +329,25 @@ $$ |  $$ |$$ |        $$ |     $$ |  $$ |\$  /$$ |  $$ |   $$  /    $$ |  $$ |  
 // min heap for storing asks and keeping track of total volume
 type AsksHeap struct {
 	Limits []*Limit
-	Volume float64
 }
 
-func (a AsksHeap) Len() int { return len(a.Limits) }
+func NewAsksHeap() *AsksHeap {
+	return &AsksHeap{
+		Limits: []*Limit{},
+	}
+}
+
+func (a *AsksHeap) Len() int { return len(a.Limits) }
+
+func (a *AsksHeap) Top() *Limit {
+	if len(a.Limits) == 0 {
+		return nil
+	}
+	return a.Limits[0]
+}
 
 func (a *AsksHeap) Push(l *Limit) {
 	a.Limits = append(a.Limits, l)
-	a.Volume += l.totalvol
 	a.siftup()
 }
 
@@ -365,7 +357,6 @@ func (a *AsksHeap) Pop() *Limit {
 	val := a.Limits[n-1]
 	a.siftdown(0, n-2)
 	a.Limits = a.Limits[:n-1]
-	a.Volume -= val.totalvol
 	return val
 }
 
@@ -398,7 +389,7 @@ func (a *AsksHeap) siftdown(curridx, endidx int) {
 		}
 
 		if a.Limits[idxtoswap].price < a.Limits[curridx].price {
-			(*a).swap(idxtoswap, curridx)
+			a.swap(idxtoswap, curridx)
 			curridx = idxtoswap
 			leftidx = 2*curridx + 1
 		} else {
@@ -410,19 +401,30 @@ func (a *AsksHeap) siftdown(curridx, endidx int) {
 // max heap for storing bids
 type BidsHeap struct {
 	Limits []*Limit
-	Volume float64
 }
 
-func (b BidsHeap) Len() int { return len(b.Limits) }
+func NewBidsHeap() *BidsHeap {
+	return &BidsHeap{
+		Limits: []*Limit{},
+	}
+}
+
+func (b *BidsHeap) Len() int { return len(b.Limits) }
 func (b *BidsHeap) swap(i, j int) {
 	temp := b.Limits[i]
 	b.Limits[i] = b.Limits[j]
 	b.Limits[j] = temp
 }
 
+func (b *BidsHeap) Top() *Limit {
+	if len(b.Limits) == 0 {
+		return nil
+	}
+	return b.Limits[0]
+}
+
 func (b *BidsHeap) Push(l *Limit) {
 	b.Limits = append(b.Limits, l)
-	b.Volume += l.totalvol
 	b.siftup()
 }
 
@@ -432,7 +434,6 @@ func (b *BidsHeap) Pop() *Limit {
 	val := b.Limits[n-1]
 	b.siftdown(0, n-2)
 	b.Limits = b.Limits[:n-1]
-	b.Volume -= val.totalvol
 	return val
 }
 
@@ -459,7 +460,7 @@ func (b *BidsHeap) siftdown(curridx, endidx int) {
 		}
 
 		if b.Limits[idxtoswap].price > b.Limits[curridx].price {
-			(*b).swap(idxtoswap, curridx)
+			b.swap(idxtoswap, curridx)
 			curridx = idxtoswap
 			leftidx = 2*curridx + 1
 		} else {

@@ -37,7 +37,11 @@ func TestPlaceLimitOrder(t *testing.T) {
 	ob.PlaceLimitOrder(10_000, sellOrderA)
 	ob.PlaceLimitOrder(9_000, sellOrderB)
 
-	assert(t, len(ob.asks), 2)
+	assert(t, len(ob.Asks().Limits), 2)
+
+	for _, limit := range ob.Asks().Limits {
+		fmt.Println(limit.totalvol)
+	}
 
 }
 
@@ -51,7 +55,7 @@ func TestPlaceMarketOrder(t *testing.T) {
 	matches := ob.PlaceMarketOrder(buyOrder)
 
 	assert(t, len(matches), 1)
-	assert(t, len(ob.asks), 1)
+	assert(t, len(ob.Asks().Limits), 1)
 	assert(t, ob.AsksTotalVolume(), 10.0)
 	assert(t, matches[0].ask, sellOrder)
 	assert(t, matches[0].bid, buyOrder)
@@ -82,7 +86,7 @@ func TestPlaceMarketOrderMultiFill(t *testing.T) {
 
 	assert(t, ob.BidsTotalVolume(), 4.0)
 	assert(t, len(matches), 3)
-	assert(t, len(ob.bids), 1)
+	assert(t, len(ob.Bids().Limits), 1)
 
 	fmt.Printf("%+v", matches)
 

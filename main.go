@@ -127,7 +127,7 @@ func (ex *Exchange) handleGetBook(c echo.Context) error {
 		Bids:           []*Order{},
 	}
 
-	for _, limit := range ob.Asks() {
+	for _, limit := range ob.Asks().Limits {
 		for _, order := range limit.Orders() {
 			o := Order{
 				ID:        order.ID,
@@ -139,7 +139,7 @@ func (ex *Exchange) handleGetBook(c echo.Context) error {
 			orderbookData.Asks = append(orderbookData.Asks, &o)
 		}
 	}
-	for _, limit := range ob.Bids() {
+	for _, limit := range ob.Bids().Limits {
 		for _, order := range limit.Orders() {
 			o := Order{
 				ID:        order.ID,
