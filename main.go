@@ -15,6 +15,7 @@ func main() {
 
 	e.GET("book/:ticker", ex.handleGetBook)
 	e.POST("/order", ex.handlePlaceOrder)
+	e.DELETE("/order/:id", ex.cancelOrder)
 
 	e.Start(":3000")
 }
@@ -56,6 +57,21 @@ type PlaceOrderRequest struct {
 	Ticker Ticker
 }
 
+// type CancelOrderRequest struct {
+// 	Bid bool
+// 	ID  int64
+// }
+
+func (ex *Exchange) cancelOrder(c echo.Context) error {
+	// id := c.Param("id")
+
+	// if err := json.NewDecoder(c.Request().Body).Decode(&id); err != nil {
+	// 	return c.JSON(http.StatusBadRequest, map[string]any{"msg": "invalid id"})
+	// }
+
+	return nil
+}
+
 func (ex *Exchange) handlePlaceOrder(c echo.Context) error {
 	var placeOrderData PlaceOrderRequest
 
@@ -83,6 +99,7 @@ func (ex *Exchange) handlePlaceOrder(c echo.Context) error {
 
 // JSON representation
 type Order struct {
+	ID        int64
 	Price     float64
 	Size      float64
 	Action    string
@@ -113,6 +130,7 @@ func (ex *Exchange) handleGetBook(c echo.Context) error {
 	for _, limit := range ob.Asks() {
 		for _, order := range limit.Orders() {
 			o := Order{
+				ID:        order.ID,
 				Price:     limit.Price(),
 				Size:      order.Size(),
 				Action:    order.Action(),
@@ -124,6 +142,7 @@ func (ex *Exchange) handleGetBook(c echo.Context) error {
 	for _, limit := range ob.Bids() {
 		for _, order := range limit.Orders() {
 			o := Order{
+				ID:        order.ID,
 				Price:     limit.Price(),
 				Size:      order.Size(),
 				Action:    order.Action(),

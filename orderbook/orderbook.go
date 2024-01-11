@@ -2,6 +2,7 @@ package orderbook
 
 import (
 	"fmt"
+	"math/rand"
 	"sort"
 	"time"
 )
@@ -22,12 +23,14 @@ const (
 )
 
 type Order struct {
+	ID        int64
 	ordersize float64
 	action    string
 	lim       *Limit
 	timestamp int64
 }
 
+// getters
 func (o *Order) Limit() *Limit    { return o.lim }
 func (o *Order) Action() string   { return o.action }
 func (o *Order) Size() float64    { return o.ordersize }
@@ -43,6 +46,7 @@ type Match struct {
 // Constructor for Order type
 func NewOrder(ac string, size float64) *Order {
 	return &Order{
+		ID:        int64(rand.Intn(1000000000)),
 		ordersize: size,
 		action:    ac,
 		timestamp: time.Now().UnixNano(),
@@ -199,8 +203,8 @@ $$ |  $$ |$$ |  $$ |$$ |  $$ |$$ |      $$ |  $$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |
 */
 
 type Orderbook struct {
-	asks []*Limit
-	bids []*Limit
+	asks AsksHeap
+	bids BidsHeap
 
 	askLimits map[float64]*Limit
 	bidLimits map[float64]*Limit
@@ -209,7 +213,7 @@ type Orderbook struct {
 func (ob *Orderbook) BidsTotalVolume() float64 {
 	totalVolume := 0.0
 
-	for i := 0; i < len(ob.bids); i++ {
+	for i := 0; i < ob.bids.Len(); i++ {
 		totalVolume += ob.bids[i].totalvol
 	}
 
@@ -219,7 +223,7 @@ func (ob *Orderbook) BidsTotalVolume() float64 {
 func (ob *Orderbook) AsksTotalVolume() float64 {
 	totalVolume := 0.0
 
-	for i := 0; i < len(ob.asks); i++ {
+	for i := 0; i < ob.asks.Len(); i++ {
 		totalVolume += ob.asks[i].totalvol
 	}
 
@@ -227,12 +231,10 @@ func (ob *Orderbook) AsksTotalVolume() float64 {
 }
 
 func (ob *Orderbook) Asks() []*Limit {
-	sort.Sort(ByBestAsk{ob.asks}) //////////////////////////////////////////////////////////////// OPTIMIZE
 	return ob.asks
 }
 
 func (ob *Orderbook) Bids() []*Limit {
-	sort.Sort(ByBestBid{ob.bids}) //////////////////////////////////////////////////////////////// OPTIMIZE
 	return ob.bids
 }
 
@@ -343,102 +345,125 @@ $$ |  $$ |$$ |        $$ |     $$ |  $$ |\$  /$$ |  $$ |   $$  /    $$ |  $$ |  
 
 */
 
-// for sorting limits by best ask or best bid (OLD WAY) takes O(NLOGN) each time
-type Limits []*Limit
+// min heap for storing asks and keeping track of total volume
+type AsksHeap struct {
+	Limits []*Limit
+	Volume float64
+}
 
-// ByBestAst is a type for sorting limits by best ask
-type ByBestAsk struct{ Limits }
+func (a AsksHeap) Len() int { return len(a.Limits) }
 
-func (a ByBestAsk) Len() int { return len(a.Limits) }
-func (a ByBestAsk) Swap(i, j int) {
+func (a *AsksHeap) Push(l *Limit) {
+	a.Limits = append(a.Limits, l)
+	a.Volume += l.totalvol
+	a.siftup()
+}
+
+func (a *AsksHeap) Pop() *Limit {
+	n := len(a.Limits)
+	a.swap(0, n-1)
+	val := a.Limits[n-1]
+	a.siftdown(0, n-2)
+	a.Limits = a.Limits[:n-1]
+	a.Volume -= val.totalvol
+	return val
+}
+
+func (a *AsksHeap) swap(i, j int) {
 	temp := a.Limits[i]
 	a.Limits[i] = a.Limits[j]
 	a.Limits[j] = temp
 }
-func (a ByBestAsk) Less(i, j int) bool { return a.Limits[i].price < a.Limits[j].price }
 
-// ByBestBid is a type for sorting limits by best bid
-type ByBestBid struct{ Limits }
+func (a *AsksHeap) siftup() {
+	curridx := len(a.Limits) - 1
+	parentidx := (curridx - 1) / 2
+	for curridx > 0 && a.Limits[curridx].price < a.Limits[parentidx].price {
+		a.swap(curridx, parentidx)
+		curridx = parentidx
+		parentidx = (curridx - 1) / 2
+	}
+}
 
-func (b ByBestBid) Len() int { return len(b.Limits) }
-func (b ByBestBid) Swap(i, j int) {
+func (a *AsksHeap) siftdown(curridx, endidx int) {
+	leftidx := 2*curridx + 1
+	for leftidx <= endidx {
+		rightidx := curridx*2 + 2
+		if rightidx > endidx {
+			rightidx = -1
+		}
+		idxtoswap := leftidx
+		if rightidx != -1 && a.Limits[rightidx].price < a.Limits[leftidx].price {
+			idxtoswap = rightidx
+		}
+
+		if a.Limits[idxtoswap].price < a.Limits[curridx].price {
+			(*a).swap(idxtoswap, curridx)
+			curridx = idxtoswap
+			leftidx = 2*curridx + 1
+		} else {
+			return
+		}
+	}
+}
+
+// max heap for storing bids
+type BidsHeap struct {
+	Limits []*Limit
+	Volume float64
+}
+
+func (b BidsHeap) Len() int { return len(b.Limits) }
+func (b *BidsHeap) swap(i, j int) {
 	temp := b.Limits[i]
 	b.Limits[i] = b.Limits[j]
 	b.Limits[j] = temp
 }
-func (b ByBestBid) Less(i, j int) bool { return b.Limits[i].price > b.Limits[j].price }
 
-// OPTIMIZATION REDUCE RESTRUCTURE TIME FROM O(NLOGN) TO O(LOGN) BY USING A HEAP INSTEAD OF SORTING
+func (b *BidsHeap) Push(l *Limit) {
+	b.Limits = append(b.Limits, l)
+	b.Volume += l.totalvol
+	b.siftup()
+}
 
-// type AsksHeap struct {
-// 	limits []*Limit
-// 	index  map[*Limit]int
-// }
+func (b *BidsHeap) Pop() *Limit {
+	n := len(b.Limits)
+	b.swap(0, n-1)
+	val := b.Limits[n-1]
+	b.siftdown(0, n-2)
+	b.Limits = b.Limits[:n-1]
+	b.Volume -= val.totalvol
+	return val
+}
 
-// // a min Heap
+func (b *BidsHeap) siftup() {
+	curridx := len(b.Limits) - 1
+	parentidx := (curridx - 1) / 2
+	for curridx > 0 && b.Limits[curridx].price > b.Limits[parentidx].price {
+		b.swap(curridx, parentidx)
+		curridx = parentidx
+		parentidx = (curridx - 1) / 2
+	}
+}
 
-// func (a AsksHeap) Len() int           { return len(a.limits) }
-// func (a AsksHeap) BestAsk() *Limit    { return a.limits[0] }
-// func (a AsksHeap) Less(i, j int) bool { return a.limits[i].Price < a.limits[j].Price }
-// func (a AsksHeap) Insert(l *Limit) {
-// 	// add to heap
-// 	a.limits = append(a.limits, l)
-// 	i := len(a.limits) // use +1 indexing
-// 	//restructure heap
-// 	for i > 0 && a.Less(i, i/2) {
-// 		//swap elements
-// 		temp := a.limits[i]
-// 		a.limits[i] = a.limits[i/2]
-// 		a.limits[i/2] = temp
+func (b *BidsHeap) siftdown(curridx, endidx int) {
+	leftidx := 2*curridx + 1
+	for leftidx <= endidx {
+		rightidx := curridx*2 + 2
+		if rightidx > endidx {
+			rightidx = -1
+		}
+		idxtoswap := leftidx
+		if rightidx != -1 && b.Limits[rightidx].price > b.Limits[leftidx].price {
+			idxtoswap = rightidx
+		}
 
-// 		// update index mapping
-// 		a.index[a.limits[i]] = i
-// 		a.index[a.limits[i/2]] = i / 2
-
-// 		i = i / 2
-// 	}
-// }
-
-// func (a AsksHeap) Delete(l *Limit) {
-// 	// find index of limit
-// 	i := a.index[l]
-
-// 	// swap with last element
-// 	a.limits[i] = a.limits[len(a.limits)-1]
-// 	a.limits = a.limits[:len(a.limits)-1]
-
-// 	// update index mapping
-// 	a.index[a.limits[i]] = i
-
-// 	// restructure heap
-// 	for i > 0 && a.Less(i, i/2) {
-// 		//swap elements
-// 		temp := a.limits[i]
-// 		a.limits[i] = a.limits[i/2]
-// 		a.limits[i/2] = temp
-
-// 		// update index mapping
-// 		a.index[a.limits[i]] = i
-// 		a.index[a.limits[i/2]] = i / 2
-
-// 		i = i / 2
-// 	}
-// }
-
-// type BidsHeap []*Limit                // a max Heap
-// func (b BidsHeap) Len() int           { return len(b) }
-// func (a BidsHeap) BestBid() *Limit    { return a[0] }
-// func (b BidsHeap) Less(i, j int) bool { return b[i].Price > b[j].Price }
-
-// 2. use a heap to store orders
-
-// for sorting orders by timestamp
-// type Orders []*Order
-
-// func (o Orders) Len() int { return len(o) }
-// func (o Orders) Swap(i, j int) {
-// 	temp := o[i]
-// 	o[i] = o[j]
-// 	o[j] = temp
-// }
-// func (o Orders) Less(i, j int) bool { return o[i].Timestamp < o[j].Timestamp }
+		if b.Limits[idxtoswap].price > b.Limits[curridx].price {
+			(*b).swap(idxtoswap, curridx)
+			curridx = idxtoswap
+			leftidx = 2*curridx + 1
+		} else {
+			return
+		}
+	}
+}
