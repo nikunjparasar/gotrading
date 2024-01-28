@@ -43,6 +43,9 @@ type Match struct {
 	price      float64
 }
 
+func (m *Match) Price() float64 { return m.price }
+func (m *Match) Size() float64  { return m.sizefilled }
+
 // Constructor for Order type
 func NewOrder(ac string, size float64) *Order {
 	return &Order{

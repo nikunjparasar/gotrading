@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"exchange/orderbook"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -11,7 +12,7 @@ import (
 
 func main() {
 	e := echo.New()
-
+	e.HTTPErrorHandler = httpErrorHandler
 	ex := NewExchange()
 
 	e.GET("book/:ticker", ex.handleGetBook)
@@ -19,6 +20,10 @@ func main() {
 	e.DELETE("/order/:id", ex.cancelOrder)
 
 	e.Start(":3000")
+}
+
+func httpErrorHandler(err error, c echo.Context) {
+	fmt.Println(err)
 }
 
 // define the market
@@ -92,8 +97,17 @@ func (ex *Exchange) handlePlaceOrder(c echo.Context) error {
 	}
 
 	if placeOrderData.Type == MARKET_ORDER {
+		vol := order.Size()
 		matches := ob.PlaceMarketOrder(order)
-		return c.JSON(http.StatusOK, map[string]any{"matches": len(matches)})
+
+		averagePrice := 0.0
+		for i := 0; i < len(matches); i++ {
+			averagePrice += (matches[i].Price() * matches[i].Size())
+		}
+		averagePrice /= float64(vol)
+		message := fmt.Sprintf("MARKET ORDER PLACED, average price: %.v", averagePrice)
+
+		return c.JSON(http.StatusOK, map[string]any{"msg": message})
 	}
 
 	return nil
