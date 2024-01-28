@@ -207,6 +207,7 @@ type Orderbook struct {
 
 	askLimits map[float64]*Limit
 	bidLimits map[float64]*Limit
+	orders    map[int64]*Order
 }
 
 // orderbook constructor
@@ -216,6 +217,7 @@ func NewOrderbook() *Orderbook {
 		bids:      *NewBidsHeap(),
 		askLimits: make(map[float64]*Limit),
 		bidLimits: make(map[float64]*Limit),
+		orders:    make(map[int64]*Order),
 	}
 }
 
@@ -235,11 +237,13 @@ func (ob *Orderbook) AsksTotalVolume() float64 {
 	return totalVol
 }
 
+func (ob *Orderbook) Orders() map[int64]*Order { return ob.orders }
+
 func (ob *Orderbook) Asks() AsksHeap { return ob.asks }
 
 func (ob *Orderbook) Bids() BidsHeap { return ob.bids }
 
-func (ob *Orderbook) PlaceMarketOrder(o *Order) []Match {
+func (ob *Orderbook) PlaceMarketOrder(o *Order) []Match { // these will be FOK orders for now
 	matches := []Match{}
 
 	if o.action == BUY {
@@ -279,7 +283,6 @@ func (ob *Orderbook) PlaceMarketOrder(o *Order) []Match {
 				delete(ob.bidLimits, bestBid.Price())
 			}
 		}
-
 	}
 
 	return matches
@@ -306,6 +309,7 @@ func (ob *Orderbook) PlaceLimitOrder(price float64, o *Order) {
 		}
 	}
 	limit.AddOrder(o)
+	ob.orders[o.ID] = o
 
 }
 

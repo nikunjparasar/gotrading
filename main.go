@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"exchange/orderbook"
 	"net/http"
+	"strconv"
 
 	"github.com/labstack/echo/v4"
 )
@@ -57,19 +58,20 @@ type PlaceOrderRequest struct {
 	Ticker Ticker
 }
 
-// type CancelOrderRequest struct {
-// 	Bid bool
-// 	ID  int64
-// }
+type CancelOrderRequest struct {
+	Bid bool
+	ID  int64
+}
 
 func (ex *Exchange) cancelOrder(c echo.Context) error {
-	// id := c.Param("id")
+	idStr := c.Param("id")
+	id, _ := strconv.Atoi(idStr)
 
-	// if err := json.NewDecoder(c.Request().Body).Decode(&id); err != nil {
-	// 	return c.JSON(http.StatusBadRequest, map[string]any{"msg": "invalid id"})
-	// }
+	ob := ex.orderbooks[TICKER_ETH]
+	order := ob.Orders()[int64(id)]
+	ob.CancelOrder(order)
 
-	return nil
+	return c.JSON(http.StatusOK, map[string]any{"msg": "order cancelled"})
 }
 
 func (ex *Exchange) handlePlaceOrder(c echo.Context) error {
