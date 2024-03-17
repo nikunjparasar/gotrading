@@ -324,7 +324,8 @@ func (ob *Orderbook) CancelOrder(o *Order) {
 // HEAP OPTIMIZATIONS FOR ORDERBOOK LIMITS
 // Reduced each market order to average O(log(n)) time complexity from O(nlog(n))
 // to show the orderbook on the frontend, we can just iterate through the top limits
-// will be klogn for showing it on the frontend where k is the number of limits to show
+// will need to preprocess the orderbook to get the top 10 limits for each side for the frontend display
+// this preprocessed data should be dynamically updated as orders are placed
 
 // min heap for storing asks and keeping track of total volume
 type AsksHeap struct {

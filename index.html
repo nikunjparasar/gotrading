@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Trading Engine Frontend</title>
+</head>
+<body>
+    <h1>Trading Engine Interface</h1>
+
+    <h2>Place Order</h2>
+    <form id="placeOrderForm">
+        <label>Type: 
+            <select name="type">
+                <option value="LIMIT">Limit</option>
+                <option value="MARKET">Market</option>
+            </select>
+        </label>
+        <label>Action: 
+            <select name="action">
+                <option value="BUY">Buy</option>
+                <option value="SELL">Sell</option>
+            </select>
+        </label>
+        <label>Size: <input type="number" name="size" step="0.01"></label>
+        <label>Price: <input type="number" name="price" step="0.01"></label>
+        <label>Ticker: 
+            <select name="ticker">
+                <option value="ETH">ETH</option>
+            </select>
+        </label>
+        <button type="submit">Place Order</button>
+    </form>
+
+    <h2>Cancel Order</h2>
+    <form id="cancelOrderForm">
+        <label>Order ID: <input type="number" name="id"></label>
+        <button type="submit">Cancel Order</button>
+    </form>
+
+    <h2>Order Book</h2>
+    <button id="refreshOrderBook">Refresh Order Book</button>
+    <div id="orderBook"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
